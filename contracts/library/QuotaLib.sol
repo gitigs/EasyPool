@@ -15,22 +15,27 @@ library QuotaLib {
     }
 
     /**     
-     * @dev Claim share if some available.
+     * @dev Calculate share and claim share.
      */
     function claimShare(Storage storage self, address addr, uint currentAmount, uint[2] fraction) internal returns (uint) {
-        uint totalShare = calcShare(currentAmount.add(self.claimedAmount), fraction);
+        uint share = calcShare(self, addr, currentAmount, fraction);
+        self.claimedShares[addr] = self.claimedShares[addr].add(share);
+        self.claimedAmount = self.claimedAmount.add(share);
+        return share;
+    }
+
+    /**     
+     * @dev Calculate share.
+     */
+    function calcShare(Storage storage self, address addr, uint currentAmount, uint[2] fraction) internal view returns (uint) {
+        uint totalShare = share(currentAmount.add(self.claimedAmount), fraction);
         uint claimedShare = self.claimedShares[addr];        
         assert(totalShare >= claimedShare);
         if(totalShare == claimedShare) {
             return 0;
-        }
-
-        uint claimed = totalShare - claimedShare;
-        self.claimedShares[addr] = self.claimedShares[addr].add(claimed);
-        self.claimedAmount = self.claimedAmount.add(claimed);
-
-        return claimed;
-    }
+        }        
+        return totalShare - claimedShare;
+    }    
 
     /**     
      * @dev ...
@@ -44,7 +49,7 @@ library QuotaLib {
     /**     
      * @dev ...
      */
-    function calcShare(uint amount, uint[2] fraction) private pure returns (uint) {
+    function share(uint amount, uint[2] fraction) private pure returns (uint) {
         return amount.mul(fraction[0]).div(fraction[1]);
     }
 }

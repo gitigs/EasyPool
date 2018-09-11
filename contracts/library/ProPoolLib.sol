@@ -125,8 +125,9 @@ library ProPoolLib {
         public 
     {
         if(presaleAddress != address(0)) {
-            pool.presaleAddress = presaleAddress;
-            emit PresaleAddressLocked(presaleAddress);
+            require(presaleAddress != address(this)); 
+            pool.presaleAddress = presaleAddress;           
+            emit PresaleAddressLocked(presaleAddress);            
         }
                 
         pool.feeService = IFeeService(feeServiceAddr);
@@ -213,6 +214,7 @@ library ProPoolLib {
         onlyInState(pool, State.Open) 
     {
         require(presaleAddress != address(0));
+        require(presaleAddress != address(this));
         require(pool.presaleAddress == address(0));
 
         pool.presaleAddress = presaleAddress;
@@ -533,6 +535,45 @@ library ProPoolLib {
             whitelist[i] = part.whitelist[i];
         }                      
     }        
+
+    /**
+     * @dev Returns participant shares.
+     */
+    function getParticipantShares(Pool storage pool, address addr) public view returns (uint refundShare, uint[] tokenShare) {
+        uint netPoolContribution;
+        uint netPartContribution;
+        uint poolRemaining;
+        uint poolCtorFee;
+
+        if(pool.state == State.Distribution || pool.state == State.FullRefund) {
+            (netPoolContribution, netPartContribution, poolRemaining, poolCtorFee) = calcPoolSummary3(pool, addr);        
+            tokenShare = new uint[](pool.tokenAddresses.length);
+
+            if(netPartContribution > 0) {
+
+                refundShare = pool.refundQuota.calcShare(
+                    addr, 
+                    address(this).balance - poolRemaining,
+                    [netPartContribution, netPoolContribution]
+                );
+
+                if(pool.feeToTokenMode) {
+                    netPoolContribution += poolCtorFee;
+                    if(pool.feeToTokenAddress == msg.sender) {
+                        netPartContribution += poolCtorFee;
+                    }
+                }  
+
+                for(uint i = 0; i < pool.tokenAddresses.length; i++) {
+                    tokenShare[i] = pool.tokenQuota[pool.tokenAddresses[i]].calcShare(
+                        addr,
+                        IERC20Base(pool.tokenAddresses[i]).balanceOf(address(this)),
+                        [netPartContribution, netPoolContribution]
+                    );                
+                }            
+            }       
+        }  
+    }    
 
     /**
      * @dev Returns group details.
@@ -1118,11 +1159,19 @@ library ProPoolLib {
     /**
      * @dev Calculate pool summaries.
      */
-    function calcPoolSummary(Pool storage pool) private view returns(uint poolContribution, uint poolRemaining, uint ctorFee) {
+    function calcPoolSummary(Pool storage pool) 
+        private view 
+        returns
+    (
+        uint poolContribution, 
+        uint poolRemaining, 
+        uint ctorFee
+    ) 
+    {
         Group storage group;
         uint length = pool.groups.length;
-        for(uint i = 0; i < length; i++) {
-            group = pool.groups[i];
+        for(uint idx = 0; idx < length; idx++) {
+            group = pool.groups[idx];
             if(!group.exists) {
                 break;
             }
@@ -1132,6 +1181,66 @@ library ProPoolLib {
             ctorFee += calcFee(group.contribution, group.ctorFeePerEther);
         }
     }  
+
+    /**
+     * @dev Calculate pool & participant summaries.
+     */  
+    function calcPoolSummary2(Pool storage pool, address addr) 
+        private view
+        returns
+    (
+        uint poolContribution,
+        uint poolRemaining,
+        uint poolCtorFee,
+        uint partContribution,        
+        uint partCtorFee
+    ) 
+    {
+        Group storage group;
+        Participant storage participant = pool.participantToData[addr];        
+        uint length = pool.groups.length;
+        for(uint idx = 0; idx < length; idx++) {            
+            group = pool.groups[idx];
+            if(!group.exists) {
+                break;
+            }
+
+            poolRemaining += group.remaining;
+            poolContribution += group.contribution;
+            poolCtorFee += calcFee(group.contribution, group.ctorFeePerEther);
+                        
+            partContribution += participant.contribution[idx];
+            partCtorFee += calcFee(participant.contribution[idx], group.ctorFeePerEther);
+        }
+    }     
+
+    /**
+     * @dev Calculate pool & participant net summaries.
+     */   
+    function calcPoolSummary3(Pool storage pool, address addr) 
+        private view
+        returns
+    (
+        uint netPoolContribution,
+        uint netPartContribution,
+        uint poolRemaining,
+        uint poolCtorFee
+    ) 
+    {
+        uint poolContribution;        
+        uint partContribution;
+        uint partCtorFee;
+
+        (poolContribution, 
+            poolRemaining, 
+            poolCtorFee, 
+            partContribution,             
+            partCtorFee
+        ) = calcPoolSummary2(pool, addr);
+
+        netPoolContribution = poolContribution - poolCtorFee - calcFee(poolContribution, pool.svcFeePerEther);
+        netPartContribution = partContribution - partCtorFee - calcFee(partContribution, pool.svcFeePerEther);
+    }          
   
     /**
      * @dev Validate group settings.

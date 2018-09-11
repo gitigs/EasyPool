@@ -181,6 +181,19 @@ contract ProPool is IERC223Receiver {
     /**
      * @dev Redirect to pool library.
      */
+    function getParticipantShares(address partAddress) 
+        external view 
+        returns (
+            uint refundShare, 
+            uint[] tokenShare
+        ) 
+    {
+        return pool.getParticipantShares(partAddress);
+    }
+
+    /**
+     * @dev Redirect to pool library.
+     */
     function getGroupDetails(uint groupIndex)
         external view 
         returns (

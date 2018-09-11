@@ -19,14 +19,14 @@ contract CMService is Pausable, HasNoEther {
      * @dev Deploy new pool contract.
      */
     function deployPoolContract(
-        uint details,        
+        uint details,
         uint maxBalance,
         uint minContribution,
         uint maxContribution,
-        uint ctorFeePerEther,        
-        address presaleAddr,                
+        uint ctorFeePerEther,
+        address presaleAddr,
         address[] whitelist,
-        address[] admins 
+        address[] admins
     ) 
         external 
         whenNotPaused
