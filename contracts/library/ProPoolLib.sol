@@ -473,23 +473,21 @@ library ProPoolLib {
             msg.sender, 
             msg.value
         );
-    }      
+    }  
 
     /**
      * @dev Returns pool details.
      */
-    function getPoolDetails(Pool storage pool) 
+    function getPoolDetails1(Pool storage pool) 
         public view 
         returns (     
             uint libVersion,
             uint groupsCount,
             uint currentState,
             uint svcFeePerEther,
-            bool feeToTokenMode,
-            address refundAddress,
+            bool feeToTokenMode,            
             address presaleAddress,
-            address feeToTokenAddress,
-            address[] tokenAddresses,
+            address feeToTokenAddress,            
             address[] participants,
             address[] admins
         )
@@ -498,13 +496,38 @@ library ProPoolLib {
         currentState = uint(pool.state);
         groupsCount = pool.groups.length;
         svcFeePerEther = pool.svcFeePerEther;
-        feeToTokenMode = pool.feeToTokenMode;
-        refundAddress = pool.refundAddress;
+        feeToTokenMode = pool.feeToTokenMode;        
         presaleAddress = pool.presaleAddress;
-        feeToTokenAddress = pool.feeToTokenAddress;
-        tokenAddresses = pool.tokenAddresses;
+        feeToTokenAddress = pool.feeToTokenAddress;        
         participants = pool.participants;
         admins = pool.admins;
+    }  
+
+    /**
+     * @dev Returns pool details.
+     */
+    function getPoolDetails2(Pool storage pool) 
+        public view 
+        returns (      
+            uint refundBalance,
+            address refundAddress,
+            address[] tokenAddresses,
+            uint[] tokenBalances
+
+        )
+    {                                        
+        if(pool.state == State.Distribution || pool.state == State.FullRefund) {                
+            uint poolRemaining;
+            (,poolRemaining,) = calcPoolSummary(pool);
+            refundBalance = address(this).balance - poolRemaining;
+            refundAddress = pool.refundAddress;
+
+            tokenAddresses = pool.tokenAddresses;
+            tokenBalances = new uint[](tokenAddresses.length);
+            for(uint i = 0; i < tokenAddresses.length; i++) {
+                tokenBalances[i] = IERC20Base(tokenAddresses[i]).balanceOf(address(this));
+            }
+        }
     }
 
     /**
@@ -539,14 +562,14 @@ library ProPoolLib {
     /**
      * @dev Returns participant shares.
      */
-    function getParticipantShares(Pool storage pool, address addr) public view returns (uint refundShare, uint[] tokenShare) {
+    function getParticipantShares(Pool storage pool, address addr) public view returns (uint[] tokenShare, uint refundShare) {
         uint netPoolContribution;
         uint netPartContribution;
         uint poolRemaining;
-        uint poolCtorFee;
+        uint poolCtorFee;           
 
         if(pool.state == State.Distribution || pool.state == State.FullRefund) {
-            (netPoolContribution, netPartContribution, poolRemaining, poolCtorFee) = calcPoolSummary3(pool, addr);        
+            (netPoolContribution, netPartContribution, poolRemaining, poolCtorFee) = calcPoolSummary3(pool, addr);
             tokenShare = new uint[](pool.tokenAddresses.length);
 
             if(netPartContribution > 0) {
@@ -559,7 +582,7 @@ library ProPoolLib {
 
                 if(pool.feeToTokenMode) {
                     netPoolContribution += poolCtorFee;
-                    if(pool.feeToTokenAddress == msg.sender) {
+                    if(pool.feeToTokenAddress == addr) {
                         netPartContribution += poolCtorFee;
                     }
                 }  

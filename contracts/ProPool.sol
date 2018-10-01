@@ -143,24 +143,37 @@ contract ProPool is IERC223Receiver {
     /**
      * @dev Redirect to pool library.
      */
-    function getPoolDetails() 
+    function getPoolDetails1() 
         external view 
         returns(
             uint libVersion,
             uint groupsCount,
             uint currentState,
             uint svcFeePerEther,
-            bool feeToTokenMode,
-            address refundAddress,
+            bool feeToTokenMode,            
             address presaleAddress,
-            address feeToTokenAddress,
-            address[] tokenAddresses,
+            address feeToTokenAddress,            
             address[] participants,
             address[] admins
         ) 
     {
-        return pool.getPoolDetails();
+        return pool.getPoolDetails1();
     }
+
+    /**
+     * @dev Redirect to pool library.
+     */
+    function getPoolDetails2() 
+        external view 
+        returns(                  
+            uint refundBalance,                  
+            address refundAddress,            
+            address[] tokenAddresses,
+            uint[] tokenBalances
+        ) 
+    {
+        return pool.getPoolDetails2();
+    }    
 
     /**
      * @dev Redirect to pool library.
@@ -182,13 +195,13 @@ contract ProPool is IERC223Receiver {
      * @dev Redirect to pool library.
      */
     function getParticipantShares(address partAddress) 
-        external view 
+        external view
         returns (
-            uint refundShare, 
-            uint[] tokenShare
+            uint[] tokenShare,
+            uint refundShare            
         ) 
-    {
-        return pool.getParticipantShares(partAddress);
+    {        
+        return pool.getParticipantShares(partAddress);     
     }
 
     /**
