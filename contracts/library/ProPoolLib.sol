@@ -573,28 +573,29 @@ library ProPoolLib {
             tokenShare = new uint[](pool.tokenAddresses.length);
 
             if(netPartContribution > 0) {
-
                 refundShare = pool.refundQuota.calcShare(
                     addr, 
                     address(this).balance - poolRemaining,
                     [netPartContribution, netPoolContribution]
-                );
+                );        
+            }     
 
-                if(pool.feeToTokenMode) {
-                    netPoolContribution += poolCtorFee;
-                    if(pool.feeToTokenAddress == addr) {
-                        netPartContribution += poolCtorFee;
-                    }
-                }  
+            if(pool.feeToTokenMode) {
+                netPoolContribution += poolCtorFee;
+                if(pool.feeToTokenAddress == addr) {
+                    netPartContribution += poolCtorFee;
+                }
+            }  
 
+            if(netPartContribution > 0) {
                 for(uint i = 0; i < pool.tokenAddresses.length; i++) {
                     tokenShare[i] = pool.tokenQuota[pool.tokenAddresses[i]].calcShare(
                         addr,
                         IERC20Base(pool.tokenAddresses[i]).balanceOf(address(this)),
                         [netPartContribution, netPoolContribution]
                     );                
-                }            
-            }       
+                }      
+            }
         }  
     }    
 
@@ -631,9 +632,8 @@ library ProPoolLib {
     function version() public pure returns (uint) {
         // type: 100 
         // major: 100
-        // minor: 100
-        // revision: 100
-        return 100100100100;
+        // minor: 100        
+        return 100100101;
     }    
 
     /**
@@ -794,21 +794,23 @@ library ProPoolLib {
             partCtorFee
         ) = withdrawAllRemaining2(pool);
 
-        if(partContribution > 0) {
-            uint netPoolContribution = poolContribution - poolCtorFee - calcFee(poolContribution, pool.svcFeePerEther);
-            uint netPartContribution = partContribution - partCtorFee - calcFee(partContribution, pool.svcFeePerEther);
+        uint netPoolContribution = poolContribution - poolCtorFee - calcFee(poolContribution, pool.svcFeePerEther);
+        uint netPartContribution = partContribution - partCtorFee - calcFee(partContribution, pool.svcFeePerEther);
 
+        if(netPartContribution > 0) {
             withdrawRefundShare(pool, poolRemaining, netPoolContribution, netPartContribution);
+        }
 
-            if(pool.feeToTokenMode) {
-                netPoolContribution += poolCtorFee;
-                if(pool.feeToTokenAddress == msg.sender) {
-                    netPartContribution += poolCtorFee;
-                }
-            }            
+        if(pool.feeToTokenMode) {
+            netPoolContribution += poolCtorFee;
+            if(pool.feeToTokenAddress == msg.sender) {
+                netPartContribution += poolCtorFee;
+            }
+        }
 
+        if(netPartContribution > 0) {
             withdrawTokens(pool, netPoolContribution, netPartContribution);
-        }        
+        }
     }
 
     /**
