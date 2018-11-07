@@ -114,13 +114,16 @@ library ProPoolLib {
         // Can be set only once by pool admin and can't be changed later.
         address presaleAddress;
 
+        // Presale address can be locked.
+        bool lockPresale;
+
         // FeeService contract interface.
         IFeeService feeService;
 
         // When paying to the presale "Fee-to-Token" mode can be chosen by admin. 
         // In this mode, the pool creator commission will be sent to the presale
         // as a part of creator contribution. 
-        address feeToTokenAddress;
+        address feeToTokenAddress;        
         bool feeToTokenMode;
                   
         // Pool administrators array.
@@ -196,7 +199,7 @@ library ProPoolLib {
         public 
     {
 
-        // Lock presale address.
+        // Set presale address.
         if(presaleAddress != address(0)) {
             require(presaleAddress != address(this)); 
             pool.presaleAddress = presaleAddress;           
@@ -291,7 +294,7 @@ library ProPoolLib {
     /**
      * @dev Lock presale address.
      */
-    function lockPresaleAddress(Pool storage pool, address presaleAddress)
+    function lockPresaleAddress(Pool storage pool, address presaleAddress, bool lock)
         public 
         onlyAdmin(pool) 
         onlyInState(pool, State.Open) 
@@ -299,9 +302,16 @@ library ProPoolLib {
         require(presaleAddress != address(0));
         require(presaleAddress != address(this));
         require(pool.presaleAddress == address(0));
+        require(!pool.lockPresale);
 
-        // Set (lock) presale address.
+        // Set presale address.
         pool.presaleAddress = presaleAddress;
+
+        // Lock presale address.
+        if(lock) {
+            pool.lockPresale = true;
+        }
+
         emit PresaleAddressLocked(presaleAddress);
     }   
 

@@ -100,8 +100,8 @@ contract ProPool is IERC223Receiver {
     /**
      * @dev Redirect to pool library.
      */
-    function lockPresaleAddress(address presaleAddress) external {
-        pool.lockPresaleAddress(presaleAddress);
+    function lockPresaleAddress(address presaleAddress, bool lock) external {
+        pool.lockPresaleAddress(presaleAddress, lock);
     }
 
     /**
