@@ -18,7 +18,7 @@ contract FeeService is IFeeService, Ownable {
     uint public feePerEther;        
 
     /**
-     * @dev Send fee from the specified pool creator.
+     * @dev Send fee from specified pool creator.
      */
     function sendFee(address poolCreator) external payable {
         require(msg.value > 0);
@@ -56,7 +56,7 @@ contract FeeService is IFeeService, Ownable {
     }
 
     /**
-     * @dev Set service fee per ether.
+     * @dev Set service comission, in terms of 'Fee per Ether'.
      */
     function setFeePerEther(uint newFeePerEther) external onlyOwner {
         emit ServiceFeeChanged(feePerEther, newFeePerEther);
@@ -72,7 +72,7 @@ contract FeeService is IFeeService, Ownable {
     }
 
     /**
-     * @dev Get service fee per ether.
+     * @dev Get service comission, in terms of 'Fee per Ether'.
      */
     function getFeePerEther() public view returns(uint) {
         return feePerEther;

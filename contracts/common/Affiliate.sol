@@ -14,7 +14,7 @@ contract Affiliate is IAffiliate, Restricted {
     // using SafeMath for uint;  
 
     /**
-     * @dev Affiliate details.
+     * @dev Affiliate structure.
      */
     struct AffiliateData {        
         uint currentBalance;
@@ -26,7 +26,7 @@ contract Affiliate is IAffiliate, Restricted {
     }
 
     /**
-     * @dev Subscriber details.
+     * @dev Subscriber structure.
      */
     struct SubscriberData {        
         uint generatedRevenue;
@@ -60,7 +60,7 @@ contract Affiliate is IAffiliate, Restricted {
     }
 
     /**
-     * @dev Set new revenue sharing model.
+     * @dev Update revenue sharing rules.
      */
     function setRevenueSharingRules(uint[] levels, uint[] shares) external onlyOwner {    
         require(levels.length > 0 && levels.length == shares.length);
@@ -136,7 +136,7 @@ contract Affiliate is IAffiliate, Restricted {
     } 
 
     /**
-    * @dev Send revenue share for the specified subscriber.
+    * @dev Send revenue share for specified subscriber.
     */
     function sendRevenueShare(address subscriber) external payable onlyOperator {
         require(msg.value > 0);
@@ -164,7 +164,7 @@ contract Affiliate is IAffiliate, Restricted {
     }
 
     /**
-     * @dev Update level and share for the specified affiliate.
+     * @dev Update level and share for specified affiliate.
      */
     function updateLevelAndShare(AffiliateData storage aData) private {
         ShareRule[] storage rules = models[aData.modelIndex];  
@@ -184,7 +184,7 @@ contract Affiliate is IAffiliate, Restricted {
 
 
     /**
-     * @dev Get revenue share for the specified subscriber.     
+     * @dev Get revenue share for specified subscriber.     
      */
     function getSharePerEther(address subscriber) external view returns(uint sharePerEther, bool success) {
         if(subToAffiliate[subscriber] != address(0)) {
@@ -195,7 +195,7 @@ contract Affiliate is IAffiliate, Restricted {
     }
         
     /**
-     * @dev Returns revenue sharing rules for the specified model.
+     * @dev Returns revenue sharing rules for specified model.
      */
     function getRevenueSharingRules(uint modelIndex) external view returns(uint[] levels, uint[] shares) {
         ShareRule[] storage rules = models[modelIndex];
@@ -209,7 +209,7 @@ contract Affiliate is IAffiliate, Restricted {
     }        
 
     /**
-     * @dev Returns list of all subscribers for the specified affiliate. 
+     * @dev Returns list of all subscribers for specified affiliate. 
      */
     function getAffiliateSubscribers(address affiliate) external view returns(address[]) {
         return affiliateToSubs[affiliate];

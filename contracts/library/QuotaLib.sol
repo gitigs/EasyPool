@@ -9,13 +9,17 @@ import "../zeppelin/SafeMath.sol";
 library QuotaLib {    
     using SafeMath for uint;
 
+    /**     
+     * @dev Quota storage structure. Holds information about 
+     * total amount claimed and claimed shares per address.
+     */
     struct Storage {
         mapping (address => uint) claimedShares;
         uint claimedAmount;
     }
 
     /**     
-     * @dev Calculate share and claim share.
+     * @dev Calculate and claim share.
      */
     function claimShare(Storage storage self, address addr, uint currentAmount, uint[2] fraction) internal returns (uint) {
         uint share = calcShare(self, addr, currentAmount, fraction);
@@ -38,7 +42,7 @@ library QuotaLib {
     }    
 
     /**     
-     * @dev ...
+     * @dev Undo claim.
      */
     function undoClaimShare(Storage storage self, address addr, uint amount) internal {
         assert(self.claimedShares[addr] >= amount);

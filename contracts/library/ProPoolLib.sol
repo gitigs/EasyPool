@@ -28,54 +28,125 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Participation group details.     
+     * @dev Pool participation group structure. 
+     * Every participation group of the pool is represented by a copy of this structure. 
+     * This structure holds information about the group settings and its current state.
      */
     struct Group {
+
+        // Total contribution balance of the group. Every time participant 
+        // contributes to the group the value of this field will be increased 
+        // by the amount of participant contribution.
         uint contribution;            
-        uint remaining;           
+
+        // Total remaining balance of the group. Group settings can be changed 
+        // by pool administrator during the pooling period. For example, the max balance
+        // of the group or max contribution per address can be decreased. Because of this,
+        // the contribution amount of the participants that have made their contribution 
+        // before this changes can be moved from the contribution balance of the group
+        // to remainig balance of the group, partially or completely.
+        uint remaining;                   
+
+        // The total contribution balance of the group cannot be greater than this value.
         uint maxBalance;
+
+        // The min contribution per address must be equal or greater than this value.
         uint minContribution; 
+
+        // The max contribution per address must be equal or less than this value.
         uint maxContribution;        
-        uint ctorFeePerEther;                                                
+
+        // Administrator's commission in terms of "Fee per Ether".
+        uint ctorFeePerEther;          
+
+        // Indicates when the group is public or private. Public group means that 
+        // any address can contribute to it. In case of a private group, only 
+        // whitelisted addresses can contribute to the group.
         bool isRestricted;
+
+        // Group existence indicator.
         bool exists;
     }
 
     /**
-     * @dev Participant details.
+     * @dev Pool participant structrure.
+     * Every participant in the pool is represented by a copy of this structure.
+     * This structure holds information about participant and his contributions.
      */
     struct Participant {
+
+        // Describes the participant's contribution balance in the each of the groups.
         uint[8] contribution;
+
+        // Describes the participant's remaining balance in the each of the groups.
         uint[8] remaining;
+
+        // Indicates when the participant is whitelisted in the certain group.
         bool[8] whitelist;  
+
+        // Indicates when the participant is an administrator.
         bool isAdmin;
+
+        // Participant existence indicator.
         bool exists;
     }    
 
     /**
-     * @dev Pool details.
+     * @dev Pool structure.
+     * Every pool is represented by a copy of this structure. Holds information 
+     * about current state of the pool, its participation groups and participants.
      */
     struct Pool {
+
+        // Current state of the pool.
         State state;
-        uint svcFeePerEther;        
+
+        // EasyPool commission in terms of "Fee per Ether".
+        // Is set only once, during pool creation transaction.
+        uint svcFeePerEther;
+
+        // Refund sender address. 
+        // The pool refund transactions must be sent from this address.        
         address refundAddress;
+
+        // Pool funds destionation address.
+        // If locked the pool funds can only be sent to this address. 
+        // Can be set only once by pool admin and can't be changed later.
         address presaleAddress;
-        address feeToTokenAddress;
+
+        // FeeService contract interface.
         IFeeService feeService;
+
+        // When paying to the presale "Fee-to-Token" mode can be chosen by admin. 
+        // In this mode, the pool creator commission will be sent to the presale
+        // as a part of creator contribution. 
+        address feeToTokenAddress;
         bool feeToTokenMode;
                   
+        // Pool administrators array.
         address[] admins;
-        address[] participants;        
+
+        // Pool participatnts array.
+        address[] participants;     
+
+        // Confirmed tokens array.
         address[] tokenAddresses;
 
+        // Pool groups array.
         Group[8] groups;         
-        mapping(address => Participant) participantToData;        
-        mapping(address => QuotaLib.Storage) tokenQuota;        
+
+        // Mapping from participant address to the corresponding structure.
+        mapping(address => Participant) participantToData;   
+
+        // Mapping from token address to the corresponding quota storage.     
+        mapping(address => QuotaLib.Storage) tokenQuota;  
+
+        // Quota storage for pool refund balace.
         QuotaLib.Storage refundQuota;
     }                     
 
     /**
-     * @dev Throws if not admin.
+     * @dev Access modifier for admin-only functionality.
      */
     modifier onlyAdmin(Pool storage pool) {
         require(pool.participantToData[msg.sender].isAdmin);
@@ -83,7 +154,7 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Throws if wrong state.
+     * @dev Access modifier for in-state-only functionality.
      */
     modifier onlyInState(Pool storage pool, State state) {
         require(pool.state == state);
@@ -91,7 +162,7 @@ library ProPoolLib {
     }      
 
     /**
-     * @dev Throws if wrong state.
+     * @dev Access modifier for in-state-only functionality.
      */
     modifier onlyInStates2(Pool storage pool, State state1, State state2) {
         require(pool.state == state1 || pool.state == state2);
@@ -99,7 +170,7 @@ library ProPoolLib {
     }  
 
     /**
-     * @dev Throws if wrong state.
+     * @dev Access modifier for in-state-only functionality.
      */
     modifier onlyInStates3(Pool storage pool, State state1, State state2, State state3) {
         require(pool.state == state1 || pool.state == state2 || pool.state == state3);
@@ -107,7 +178,7 @@ library ProPoolLib {
     }    
 
     /**
-     * @dev Initialize pool on its creation.
+     * @dev Setting new pool instance. Called when new pool is created.     
      */
     function init(
         Pool storage pool,           
@@ -124,13 +195,16 @@ library ProPoolLib {
     )
         public 
     {
+
+        // Lock presale address.
         if(presaleAddress != address(0)) {
             require(presaleAddress != address(this)); 
             pool.presaleAddress = presaleAddress;           
             emit PresaleAddressLocked(presaleAddress);            
         }
                 
-        pool.feeService = IFeeService(feeServiceAddr);
+        // Set fee service contract.
+        pool.feeService = IFeeService(feeServiceAddr);        
         pool.svcFeePerEther = pool.feeService.getFeePerEther();
         require(pool.svcFeePerEther <= (1 ether / 4));
         emit FeeServiceAttached(
@@ -138,12 +212,14 @@ library ProPoolLib {
             pool.svcFeePerEther
         );  
         
+        // Set pool administrators.
         require(creatorAddress != address(0));
         addAdmin(pool, creatorAddress);
         for(uint i = 0; i < admins.length; i++) {
             addAdmin(pool, admins[i]);
         }
         
+        // Create first group.
         setGroupSettingsCore(
             pool,
             0,
@@ -154,6 +230,7 @@ library ProPoolLib {
             isRestricted            
         );
         
+        // Set whitelist.
         if(whitelist.length > 0) {
             require(isRestricted);
             modifyWhitelistCore(pool, 0, whitelist, new address[](0));
@@ -161,7 +238,8 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Set new group or update if exists.
+     * @dev Creates new participation group in case it doesn't exist 
+     * or updates participation group settings in case the group exists.
      */
     function setGroupSettings(
         Pool storage pool,        
@@ -176,8 +254,10 @@ library ProPoolLib {
         onlyAdmin(pool)
         onlyInState(pool, State.Open)      
     {
+        // Group existence state.
         bool exists = pool.groups[idx].exists;
 
+        // Set or update group settings.
         setGroupSettingsCore(
             pool,
             idx,
@@ -187,61 +267,70 @@ library ProPoolLib {
             ctorFeePerEther,
             isRestricted            
         );
-
-        if(exists) {
+                
+        if(exists) {            
+            // Execute rebalancing.
             groupRebalance(pool, idx);
         }
     }
 
     /**
-     * @dev Modify whitelist on the specified group.
+     * @dev Modify group whitelist.
      */
     function modifyWhitelist(Pool storage pool, uint idx, address[] include, address[] exclude)
         public 
         onlyAdmin(pool)
         onlyInState(pool, State.Open)
     {
+        // Modify whitelist (without relabancing).
         modifyWhitelistCore(pool, idx, include, exclude); 
+        // Execute group rebalancing.
         groupRebalance(pool, idx);
     }     
 
     /**
-     * @dev Lock presale address if not locked.
+     * @dev Lock presale address.
      */
     function lockPresaleAddress(Pool storage pool, address presaleAddress)
         public 
         onlyAdmin(pool) 
         onlyInState(pool, State.Open) 
-    {
+    {        
         require(presaleAddress != address(0));
         require(presaleAddress != address(this));
         require(pool.presaleAddress == address(0));
 
+        // Set (lock) presale address.
         pool.presaleAddress = presaleAddress;
         emit PresaleAddressLocked(presaleAddress);
     }   
 
     /**
-     * @dev Confirm new token address.
+     * @dev Confirm token address.
      */
     function confirmTokenAddress(Pool storage pool, address tokenAddress)
         public
         onlyAdmin(pool)
         onlyInStates2(pool, State.PaidToPresale, State.Distribution)         
-    {
+    {        
         require(tokenAddress != address(0));
         require(pool.tokenAddresses.length <= 4);
         require(!contains(pool.tokenAddresses, tokenAddress));
 
+        // Get token balance for the pool address.
         IERC20Base ERC20 = IERC20Base(tokenAddress);
-        uint balance = ERC20.balanceOf(address(this));        
+        uint balance = ERC20.balanceOf(address(this));  
+
+        // When confirming the token balance must be greater than zero.      
         require(balance > 0);
 
+        // Change state of the pool if this is the first token confirmation.
         if(pool.state == State.PaidToPresale) {
             changeState(pool, State.Distribution);            
             sendFees(pool);
         } 
                         
+        // Save token address.
         pool.tokenAddresses.push(tokenAddress);
 
         emit TokenAddressConfirmed(
@@ -257,20 +346,22 @@ library ProPoolLib {
         public
         onlyAdmin(pool)
         onlyInStates3(pool, State.PaidToPresale, State.Distribution, State.FullRefund)
-    {
+    {        
         require(refundAddress != address(0));
         require(pool.refundAddress != refundAddress);
 
+        // Set refund sender address.
         pool.refundAddress = refundAddress;
         emit RefundAddressChanged(refundAddress);
 
+        // This is full refund scenario.
         if(pool.state == State.PaidToPresale) {
             changeState(pool, State.FullRefund);
         }
     }   
 
     /**
-     * @dev Pay pool contribution to the presale.
+     * @dev Send pool balance to presale address.
      */
     function payToPresale(
         Pool storage pool,
@@ -284,20 +375,24 @@ library ProPoolLib {
         onlyInState(pool, State.Open) 
     {
         require(presaleAddress != address(0));
-        
+                        
+        // Check if presale address is locked.
         if(pool.presaleAddress == address(0)) {
             pool.presaleAddress = presaleAddress;
             emit PresaleAddressLocked(presaleAddress);
-        } else {
+        } else { 
+            // If locked then destination address must be same.
             require(pool.presaleAddress == presaleAddress);
         }
         
         uint ctorFee;
         uint poolRemaining;
-        uint poolContribution;                
-        (poolContribution, poolRemaining, ctorFee) = calcPoolSummary(pool);
+        uint poolContribution;      
+        // Calculate pool summaries.          
+        (poolContribution, poolRemaining, ctorFee) = calcPoolSummary(pool);        
         require(poolContribution > 0 && poolContribution >= minPoolBalance);
 
+        // Set fee-to-token mode.
         if(feeToToken) {
             pool.feeToTokenMode = true;            
             pool.feeToTokenAddress = msg.sender;
@@ -306,6 +401,7 @@ library ProPoolLib {
 
         changeState(pool, State.PaidToPresale);
 
+        // Transafer funds.
         addressCall(
             pool.presaleAddress,
             poolContribution - ctorFee - calcFee(poolContribution, pool.svcFeePerEther),
@@ -325,7 +421,7 @@ library ProPoolLib {
     }  
 
     /**
-     * @dev Contribute to the specified group.
+     * @dev Contribute to the group.
      */
     function deposit(Pool storage pool, uint idx)
         public        
@@ -335,9 +431,11 @@ library ProPoolLib {
         require(pool.groups.length > idx);
         require(pool.groups[idx].exists);
 
+        // Get group and participant instances.
         Participant storage participant = pool.participantToData[msg.sender];
         Group storage group = pool.groups[idx];        
 
+        // Calculate contribution and remaining balance.
         uint remaining;
         uint contribution;                
         (contribution, remaining) = calcContribution(
@@ -351,17 +449,21 @@ library ProPoolLib {
             participant
         );
 
+        // Remaining balance must be equal to zero.
         require(remaining == 0);
-        
+
+        // Set the participant existence state.
         if (!participant.exists) {
             participant.exists = true;   
             pool.participants.push(msg.sender);
         }        
 
+        // Mark participant as whitelisted.
         if(!participant.whitelist[idx]) {
             participant.whitelist[idx] = true;         
         }
 
+        // Update contribution and remaining balance.
         group.contribution = group.contribution - participant.contribution[idx] + contribution;
         group.remaining = group.remaining - participant.remaining[idx] + remaining;
         participant.contribution[idx] = contribution;
@@ -377,18 +479,22 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Withdraw from the specified group.
+     * @dev Withdraw from the group.
      */     
     function withdrawAmount(Pool storage pool, uint amount, uint idx)
         public
         onlyInState(pool, State.Open)
     {
+        // Get participant instance.
         Participant storage participant = pool.participantToData[msg.sender];                        
         uint finalAmount;
-
+        
         if(amount == 0) {
+            // If withdrawal amount is equal to zero then withdraw entire contribution.
             finalAmount = participant.contribution[idx] + participant.remaining[idx];
         } else {
+            // Requested withdrawal amount must be equal or greater than participant 
+            // remaining balance, but less or equal than his total contribution.
             require(amount >= participant.remaining[idx]);
             require(amount <= participant.contribution[idx] + participant.remaining[idx]);
             finalAmount = amount;
@@ -396,19 +502,30 @@ library ProPoolLib {
 
         require(finalAmount > 0);
         
+        // Get group instance.
         Group storage group = pool.groups[idx];
+
+        // Update group remaining balance.
         group.remaining -= participant.remaining[idx];        
-        uint extra = finalAmount - participant.remaining[idx];
+
+        // Check if withdrawal amount is greater than remaining balance.
+        uint extra = finalAmount - participant.remaining[idx];        
+
+        // Update participant remaining balance. At this point always zero.
         participant.remaining[idx] = 0;        
 
         if(extra > 0) {
-            group.contribution -= extra;
+            // Update group and participant contribution balance.
             participant.contribution[idx] -= extra;
+            group.contribution -= extra;            
+
             if(!participant.isAdmin) {
+                // Make sure that requested withdrawal amount won't break group settings.
                 require(participant.contribution[idx] >= group.minContribution);
             }
         }
 
+        // Transfer funds.
         addressTransfer(msg.sender, finalAmount);
 
         emit Withdrawal(
@@ -423,24 +540,29 @@ library ProPoolLib {
     } 
 
     /**
-     * @dev Wihdraw 'all' (public wrapper).
+     * @dev Wihdraw 'All-in-One' function (public wrapper).     
      */ 
     function withdrawAll(Pool storage pool) public {
+
+        // Withdraw refund share and tokens share.
         if (pool.state == State.FullRefund || pool.state == State.Distribution) {
             withdrawRefundAndTokens(pool);
             return;
         }
         
+        // Withdraw entire contribution balance.
         if(pool.state == State.Canceled || pool.state == State.Open) {
             withdrawAllContribution(pool);
             return;
         }            
         
+        // Withdraw remaining balance.
         if (pool.state == State.PaidToPresale) {
             withdrawAllRemaining1(pool);
             return;
         } 
 
+        // Revert transaction.
         revert();
     }
 
@@ -460,7 +582,7 @@ library ProPoolLib {
     }    
 
     /**
-     * @dev Check and accept refund transfer.
+     * @dev Accept refund transfer.     
      */
     function acceptRefundTransfer(Pool storage pool)
         public 
@@ -476,7 +598,7 @@ library ProPoolLib {
     }  
 
     /**
-     * @dev Returns pool details.
+     * @dev Returns pool details (part #1).
      */
     function getPoolDetails1(Pool storage pool) 
         public view 
@@ -504,7 +626,7 @@ library ProPoolLib {
     }  
 
     /**
-     * @dev Returns pool details.
+     * @dev Returns pool details (part #2).
      */
     function getPoolDetails2(Pool storage pool) 
         public view 
@@ -513,15 +635,14 @@ library ProPoolLib {
             address refundAddress,
             address[] tokenAddresses,
             uint[] tokenBalances
-
         )
-    {                                        
-        if(pool.state == State.Distribution || pool.state == State.FullRefund) {                
+    {                                                
+        if(pool.state == State.Distribution || pool.state == State.FullRefund) {                 
             uint poolRemaining;
             (,poolRemaining,) = calcPoolSummary(pool);
             refundBalance = address(this).balance - poolRemaining;
             refundAddress = pool.refundAddress;
-
+            
             tokenAddresses = pool.tokenAddresses;
             tokenBalances = new uint[](tokenAddresses.length);
             for(uint i = 0; i < tokenAddresses.length; i++) {
@@ -562,13 +683,13 @@ library ProPoolLib {
     /**
      * @dev Returns participant shares.
      */
-    function getParticipantShares(Pool storage pool, address addr) public view returns (uint[] tokenShare, uint refundShare) {
-        uint netPoolContribution;
-        uint netPartContribution;
-        uint poolRemaining;
-        uint poolCtorFee;           
-
+    function getParticipantShares(Pool storage pool, address addr) public view returns (uint[] tokenShare, uint refundShare) {       
         if(pool.state == State.Distribution || pool.state == State.FullRefund) {
+            uint netPoolContribution;
+            uint netPartContribution;
+            uint poolRemaining;
+            uint poolCtorFee;   
+
             (netPoolContribution, netPartContribution, poolRemaining, poolCtorFee) = calcPoolSummary3(pool, addr);
             tokenShare = new uint[](pool.tokenAddresses.length);
 
@@ -637,9 +758,9 @@ library ProPoolLib {
     }    
 
     /**
-     * @dev Withdraw contribution and remaining.
+     * @dev Withdraw entire contribution balance.
      */     
-    function withdrawAllContribution(Pool storage pool) private {
+    function withdrawAllContribution(Pool storage pool) private {        
         Participant storage participant = pool.participantToData[msg.sender];
         Group storage group;
         uint contribution;  
@@ -647,8 +768,11 @@ library ProPoolLib {
         uint amount;
         uint sum;
 
+        // Iterate through the groups.
         uint length = pool.groups.length;
         for(uint idx = 0; idx < length; idx++) {
+
+            // Read contribution and remaining balance.
             contribution = participant.contribution[idx];
             remaining = participant.remaining[idx];
             sum = contribution + remaining;
@@ -657,10 +781,13 @@ library ProPoolLib {
                 amount += sum;
                 group = pool.groups[idx];
 
-                if(contribution > 0) {
+                // Reset contribution balance.
+                if(contribution > 0) {                    
                     group.contribution -= contribution;
                     participant.contribution[idx] = 0;
                 }
+
+                // Reset remaining balance.
                 if(remaining > 0) {
                     group.remaining -= remaining;
                     participant.remaining[idx] = 0;
@@ -678,6 +805,7 @@ library ProPoolLib {
             }
         }
 
+        // Transfer funds.
         require(amount > 0);
         addressTransfer(
             msg.sender, 
@@ -686,7 +814,7 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Wihdraw only remaining (simple version).
+     * @dev Wihdraw remaining balance (simple).
      */  
     function withdrawAllRemaining1(Pool storage pool) private {
         Participant storage participant = pool.participantToData[msg.sender];        
@@ -694,10 +822,12 @@ library ProPoolLib {
         uint remaining;
         uint amount;
         
+        // Iterate through the groups.
         uint length = pool.groups.length;
         for(uint idx = 0; idx < length; idx++) {            
             remaining = participant.remaining[idx];
 
+            // Reset remaining balance.
             if(remaining > 0) {
                 amount += remaining;
                 group = pool.groups[idx];
@@ -716,6 +846,7 @@ library ProPoolLib {
             }
         }
 
+        // Transfer funds.
         require(amount > 0);
         addressTransfer(
             msg.sender, 
@@ -724,7 +855,7 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Wihdraw only remaining (advanced version).
+     * @dev Wihdraw remaining balance and calculate.
      */  
     function withdrawAllRemaining2(Pool storage pool) 
         private 
@@ -742,18 +873,22 @@ library ProPoolLib {
         uint sumRemaining; 
         uint remaining;     
 
+        // Iterate through the groups.
         uint length = pool.groups.length;
-        for(uint idx = 0; idx < length; idx++) {
-            
+        for(uint idx = 0; idx < length; idx++) {                        
             group = pool.groups[idx];
+
+            // Make required calculations.
             poolRemaining += group.remaining;
             poolContribution += group.contribution;
             poolCtorFee += calcFee(group.contribution, group.ctorFeePerEther);
             
+            // Make required calculations.
             remaining = participant.remaining[idx];
             partContribution += participant.contribution[idx];
             partCtorFee += calcFee(participant.contribution[idx], group.ctorFeePerEther);
 
+            // Reset remaining balance.
             if(remaining > 0) {              
                 sumRemaining += remaining;                            
                 group.remaining -= remaining;
@@ -771,6 +906,7 @@ library ProPoolLib {
             }
         }
 
+        // Transfer funds.
         if(sumRemaining > 0) {
             poolRemaining -= sumRemaining;
             addressTransfer(msg.sender, sumRemaining);
@@ -778,7 +914,7 @@ library ProPoolLib {
     }    
     
     /**
-     * @dev Withdarw refund share and claim tokens.
+     * @dev Withdarw refund share and tokens share.
      */  
     function withdrawRefundAndTokens(Pool storage pool) private {
         uint poolContribution;
@@ -787,6 +923,7 @@ library ProPoolLib {
         uint partContribution;        
         uint partCtorFee;
 
+        // Withdraw remaining balance.
         (poolContribution, 
             poolRemaining, 
             poolCtorFee, 
@@ -794,13 +931,16 @@ library ProPoolLib {
             partCtorFee
         ) = withdrawAllRemaining2(pool);
 
+        // Calculate net contribution values.        
         uint netPoolContribution = poolContribution - poolCtorFee - calcFee(poolContribution, pool.svcFeePerEther);
         uint netPartContribution = partContribution - partCtorFee - calcFee(partContribution, pool.svcFeePerEther);
-
+        
         if(netPartContribution > 0) {
+            // Withdraw refund share based on net contribution.
             withdrawRefundShare(pool, poolRemaining, netPoolContribution, netPartContribution);
         }
 
+        // 'Fee-to-Token' mode.
         if(pool.feeToTokenMode) {
             netPoolContribution += poolCtorFee;
             if(pool.feeToTokenAddress == msg.sender) {
@@ -809,6 +949,7 @@ library ProPoolLib {
         }
 
         if(netPartContribution > 0) {
+            // Withdraw tokens share based on net contribution.
             withdrawTokens(pool, netPoolContribution, netPartContribution);
         }
     }
@@ -825,13 +966,15 @@ library ProPoolLib {
         private 
     {
         if(address(this).balance > poolRemaining) {
+            // Calculate and claim refund share.
             uint amount = pool.refundQuota.claimShare(
                 msg.sender, 
                 address(this).balance - poolRemaining,
                 [netPartContribution, netPoolContribution]
             );
 
-            if(amount > 0) {                                
+            if(amount > 0) {          
+                // Trunsfer funds.                      
                 addressTransfer(msg.sender, amount);
                 emit RefundWithdrawal(
                     msg.sender,
@@ -844,7 +987,7 @@ library ProPoolLib {
     }
 
     /**
-     * @dev Claim tokens.
+     * @dev Withdraw tokens share.
      */
     function withdrawTokens(
         Pool storage pool,        
@@ -860,13 +1003,17 @@ library ProPoolLib {
         IERC20Base tokenContract;
         QuotaLib.Storage storage quota;
 
+        // Iterate through the token addresses.
         uint length = pool.tokenAddresses.length;
-        for(uint i = 0; i < length; i++) {                
-            tokenAddress = pool.tokenAddresses[i];
+        for(uint i = 0; i < length; i++) {             
+
+            tokenAddress = pool.tokenAddresses[i];            
             tokenContract = IERC20Base(tokenAddress); 
+            // Get token balance for the pool address.
             tokenBalance = tokenContract.balanceOf(address(this));
 
-            if(tokenBalance > 0) {                                        
+            if(tokenBalance > 0) {    
+                // Calculate and claim the token share.                                    
                 quota = pool.tokenQuota[tokenAddress];
                 tokenAmount = quota.claimShare(
                     msg.sender,
@@ -875,8 +1022,9 @@ library ProPoolLib {
                 ); 
 
                 if(tokenAmount > 0) {
+                    // Try to transfer tokens.
                     succeeded = tokenContract.transfer(msg.sender, tokenAmount);
-                    if (!succeeded) {
+                    if (!succeeded) {                        
                         quota.undoClaimShare(msg.sender, tokenAmount);
                     }
                     emit TokenWithdrawal(
@@ -892,7 +1040,7 @@ library ProPoolLib {
     }   
 
     /**
-     * @dev Set new group or update if exists.
+     * @dev Create new participation group in case it doesn't exist otherwise update its settings.     
      */
     function setGroupSettingsCore(
         Pool storage pool,        
@@ -907,8 +1055,9 @@ library ProPoolLib {
     {
         require(pool.groups.length > idx);
         Group storage group = pool.groups[idx];        
-
+        
         if(!group.exists) {
+            // Create new group. Pool groups should be created one-by-one.
             require(idx == 0 || pool.groups[idx - 1].exists);
             group.exists = true;
         }
@@ -951,22 +1100,24 @@ library ProPoolLib {
     }    
 
     /**
-     * @dev Modify whitelist on the specified group.
+     * @dev Modify group whitelist.
      */
     function modifyWhitelistCore(Pool storage pool, uint idx, address[] include, address[] exclude) private {
         require(include.length > 0 || exclude.length > 0);
         require(pool.groups.length > idx && pool.groups[idx].exists);
 
+        // Get group and participant instances.
         Group storage group = pool.groups[idx];
         Participant storage participant;        
         uint i;
 
-        if(!group.isRestricted) {            
+        // Mark group as restricted.
+        if(!group.isRestricted) {
             group.isRestricted = true;
             emit WhitelistEnabled(idx);
         }    
 
-        // exclude
+        // Exclude participants.
         for(i = 0; i < exclude.length; i++) {
             participant = pool.participantToData[exclude[i]];            
             if(participant.whitelist[idx]) {
@@ -978,14 +1129,18 @@ library ProPoolLib {
             }
         }
 
-        // include
+        // Include participants.
         for(i = 0; i < include.length; i++) {
-            participant = pool.participantToData[include[i]];          
-            if(!participant.whitelist[idx]) {                
-                if (!participant.exists) {
+            participant = pool.participantToData[include[i]];  
+
+            if(!participant.whitelist[idx]) { 
+                // Create new participant.
+                if (!participant.exists) {                    
                     pool.participants.push(include[i]);
                     participant.exists = true;                                        
                 }                        
+
+                // Set as whitelisted.
                 participant.whitelist[idx] = true;               
                 emit IncludedInWhitelist(
                     include[i],
@@ -996,17 +1151,20 @@ library ProPoolLib {
     }        
 
     /**
-     * @dev Distribute service and creator fees.
+     * @dev Distribute fees. When calling this function, contract balance should
+     *  consist of participants remaining balance, creator commission and service commission.
      */
     function sendFees(Pool storage pool) private {
         uint ctorFee;
         uint poolRemaining;
         uint poolContribution;
+        // Calculate and transfer creator fee.
         (poolContribution, poolRemaining, ctorFee) = calcPoolSummary(pool);
         if(ctorFee > 0 && !pool.feeToTokenMode) {
             addressTransfer(msg.sender, ctorFee);            
         }
-            
+        
+        // Calculate and transfer service fee.
         uint svcFee = address(this).balance - poolRemaining;        
         if(svcFee > 0) {
             address creator = getPoolCreator(pool);
@@ -1020,7 +1178,7 @@ library ProPoolLib {
     }   
 
     /**
-     * @dev Rebalance contribution for group participants.
+     * @dev Rebalance group contributions.
      */
     function groupRebalance(Pool storage pool, uint idx) private {
         Group storage group = pool.groups[idx];          
@@ -1040,6 +1198,7 @@ library ProPoolLib {
         for(uint i = 0; i < pool.participants.length; i++) {           
             participant = pool.participantToData[pool.participants[i]];                
             
+            // Calculate contribution and remaining balance.
             (contribution, remaining) = calcContribution(       
                 x,
                 0,
@@ -1051,6 +1210,7 @@ library ProPoolLib {
                 participant
             );        
 
+            // Save changes if some available.
             if(contribution != participant.contribution[x]) {
                 participant.contribution[x] = contribution;
                 participant.remaining[x] = remaining;
@@ -1069,6 +1229,7 @@ library ProPoolLib {
             );
         }
         
+        // Update group contribution and remaining balance.
         if(group.contribution != groupContribution) {
             group.contribution = groupContribution;             
             group.remaining = groupRemaining;           
@@ -1155,29 +1316,33 @@ library ProPoolLib {
         private view 
         returns(uint contribution, uint remaining)
     {
+        // Total contribution amount.
         uint totalAmount = participant.contribution[idx]
             + participant.remaining[idx]
             + amount;
 
+        // There are no limitations for admins.
         if(participant.isAdmin) {
             contribution = totalAmount;
             return;
-        }
+        }                
 
+        // Limitations on group max balance & whitelist.
         if(currentBalance >= maxBalance || (isRestricted && !participant.whitelist[idx])) {
             remaining = totalAmount;            
             return;
         }        
-                
+                        
         contribution = Math.min(maxContribution, totalAmount);        
         contribution = Math.min(maxBalance - currentBalance, contribution);
-
+        
+        // Limitation on group min contribution.
         if(contribution < minContribution) {
             remaining = totalAmount;
             contribution = 0;
             return;
         }
-
+                
         remaining = totalAmount - contribution;
     }
 
@@ -1195,6 +1360,7 @@ library ProPoolLib {
     {
         Group storage group;
         uint length = pool.groups.length;
+
         for(uint idx = 0; idx < length; idx++) {
             group = pool.groups[idx];
             if(!group.exists) {
@@ -1224,6 +1390,7 @@ library ProPoolLib {
         Group storage group;
         Participant storage participant = pool.participantToData[addr];        
         uint length = pool.groups.length;
+        
         for(uint idx = 0; idx < length; idx++) {            
             group = pool.groups[idx];
             if(!group.exists) {
@@ -1268,7 +1435,7 @@ library ProPoolLib {
     }          
   
     /**
-     * @dev Validate group settings.
+     * @dev Function for validating group settings.
      */
     function validateGroupSettings(uint maxBalance, uint minContribution, uint maxContribution) private pure {
         require(
@@ -1280,7 +1447,7 @@ library ProPoolLib {
     }
 
     /**
-     * @dev ...
+     * @dev Check if an array contains provided value.
      */
     function contains(address[] storage array, address addr) private view returns (bool) {
         for (uint i = 0; i < array.length; i++) {
